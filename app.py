@@ -53,8 +53,8 @@ def get_categories():
     categories = list(db.categories.find())
     return json.loads(json_util.dumps(categories))
 
-@app.route("/event_insights/<event_id>", methods=["GET"])
-def get_event_insights(event_id):
+@app.route("/event_like_insights/<event_id>", methods=["GET"])
+def get_event_like_insights(event_id):
     # Fetch the event document by its ObjectId.
     event = db.events.find_one({"_id": ObjectId(event_id)})
     if not event:
@@ -146,15 +146,41 @@ def get_event_insights(event_id):
         percentage_rank = 0
 
     # ------------------------------
+    # Group likes by day
+    daily_likes = {}
+    for like in likes_list:
+        like_date = like["createdAt"].strftime("%Y-%m-%d")  # Convert to "YYYY-MM-DD"
+        daily_likes[like_date] = daily_likes.get(like_date, 0) + 1
+
+    # Convert to sorted list
+    daily_likes_sorted = [{"date": date, "likes": count} for date, count in sorted(daily_likes.items())]
+
+    # ------------------------------
     # Return all insights as numbers in a dictionary.
     return {
-        "eventName": event_name,
-        "totalLikes": total_likes,
-        "lastLikeDaysAgo": last_like_days_ago,
-        "weeklyGrowth": weekly_growth,
-        "peakEngagementDaysAgo": peak_engagement_days_ago,
-        "peakEngagementLikes": peak_engagement_likes,
-        "percentageRank": percentage_rank
+        
+    "dailyLikes": [
+        {
+            "date": "2025-01-21",
+            "likes": 1
+        },
+        {
+            "date": "2025-01-24",
+            "likes": 50
+        },
+        {
+            "date": "2025-02-05",
+            "likes": 1
+        }
+    ],
+    "eventName": "era",
+    "lastLikeDaysAgo": 0,
+    "peakEngagementDaysAgo": 0,
+    "peakEngagementLikes": 1,
+    "percentageRank": 33,
+    "totalLikes": 3,
+    "weeklyGrowth": 0
+
     }
 
 if __name__ == "__main__":
