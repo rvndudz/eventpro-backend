@@ -180,8 +180,117 @@ def get_event_like_insights(event_id):
     "percentageRank": 33,
     "totalLikes": 3,
     "weeklyGrowth": 0
-
     }
 
+@app.route("/event_click_insights/<event_id>", methods=["GET"])
+def get_event_clicks_insights(event_id):
+    # Fetch the event document by its ObjectId
+    event = db.events.find_one({"_id": ObjectId(event_id)})
+    if not event:
+        return jsonify({"error": "Event not found."}), 404
+
+    now = datetime.utcnow()
+
+    # ------------------------------
+    # Get Event Name
+    event_name = event.get("title", "Untitled Event")
+
+    # ------------------------------
+    # Insight 1: Total Clicks
+    clicks_list = list(db.clicks.find({"event": ObjectId(event_id)}))
+    total_clicks = len(clicks_list)
+
+    # Compute lastClickDaysAgo: days since the most recent click
+    if total_clicks > 0:
+        latest_click_time = max(click["createdAt"] for click in clicks_list)
+        last_click_days_ago = (now - latest_click_time).days
+    else:
+        last_click_days_ago = 0
+
+    # ------------------------------
+    # Insight 2: Weekly Growth in Clicks
+    event_created = event.get("createdAt")
+    if event_created and (now - event_created).days >= 14:
+        this_week_start = now - timedelta(days=7)
+        last_week_start = now - timedelta(days=14)
+        this_week_clicks = db.clicks.count_documents({
+            "event": ObjectId(event_id),
+            "createdAt": {"$gte": this_week_start}
+        })
+        last_week_clicks = db.clicks.count_documents({
+            "event": ObjectId(event_id),
+            "createdAt": {"$gte": last_week_start, "$lt": this_week_start}
+        })
+        if last_week_clicks == 0:
+            weekly_growth = 100 if this_week_clicks > 0 else 0
+        else:
+            weekly_growth = round(((this_week_clicks - last_week_clicks) / last_week_clicks) * 100)
+    else:
+        weekly_growth = 0
+
+    # ------------------------------
+    # Insight 3: Peak Engagement for Clicks
+    if total_clicks > 0:
+        daily_counts = {}
+        for click in clicks_list:
+            click_date = click["createdAt"].date()
+            daily_counts[click_date] = daily_counts.get(click_date, 0) + 1
+
+        max_clicks = max(daily_counts.values())
+        peak_days = [d for d, count in daily_counts.items() if count == max_clicks]
+        peak_day = max(peak_days)
+        peak_engagement_days_ago = (now.date() - peak_day).days
+        peak_engagement_clicks = max_clicks
+    else:
+        peak_engagement_days_ago = 0
+        peak_engagement_clicks = 0
+
+    # ------------------------------
+    # Insight 4: Percentage Rank Among All Events for Clicks
+    all_events = list(db.events.find({}, {"clickCount": 1}))
+    total_events = len(all_events)
+    if total_events > 0:
+        def get_click_count(e):
+            if e["_id"] == event["_id"]:
+                return total_clicks
+            else:
+                return e.get("clickCount", 0)
+
+        sorted_events = sorted(all_events, key=get_click_count, reverse=True)
+        rank = None
+        for i, e in enumerate(sorted_events):
+            if e["_id"] == event["_id"]:
+                rank = i + 1
+                break
+        if rank is None:
+            rank = total_events
+        percentage_rank = round((rank / total_events) * 100)
+    else:
+        percentage_rank = 0
+
+    # ------------------------------
+    # Group clicks by day
+    daily_clicks = {}
+    for click in clicks_list:
+        click_date = click["createdAt"].strftime("%Y-%m-%d")
+        daily_clicks[click_date] = daily_clicks.get(click_date, 0) + 1
+
+    # Convert to sorted list
+    daily_clicks_sorted = [{"date": date, "clicks": count} for date, count in sorted(daily_clicks.items())]
+
+    # ------------------------------
+    # Return all insights as numbers in a dictionary
+    return jsonify({
+        "dailyClicks": daily_clicks_sorted,
+        "eventName": event_name,
+        "lastClickDaysAgo": last_click_days_ago,
+        "peakEngagementDaysAgo": peak_engagement_days_ago,
+        "peakEngagementClicks": peak_engagement_clicks,
+        "percentageRank": percentage_rank,
+        "totalClicks": total_clicks,
+        "weeklyGrowth": weekly_growth
+    })
+
+
 if __name__ == "__main__":
-    app.run() 
+    app.run(debug=True, use_reloader=False)
