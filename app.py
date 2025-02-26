@@ -55,7 +55,7 @@ def get_categories():
 
 @app.route("/event_like_insights/<event_id>", methods=["GET"])
 def get_event_like_insights(event_id):
-    # Fetch the event document by its ObjectId.
+    # Fetch the event document by its ObjectId
     event = db.events.find_one({"_id": ObjectId(event_id)})
     if not event:
         return {"error": "Event not found."}
@@ -73,7 +73,6 @@ def get_event_like_insights(event_id):
 
     # Compute lastLikeDaysAgo: days since the most recent like
     if total_likes > 0:
-        # Determine the most recent like time from the list
         latest_like_time = max(like["createdAt"] for like in likes_list)
         last_like_days_ago = (now - latest_like_time).days
     else:
@@ -94,7 +93,7 @@ def get_event_like_insights(event_id):
             "createdAt": {"$gte": last_week_start, "$lt": this_week_start}
         })
         if last_week_likes == 0:
-            # If there were no likes in the previous week, treat any likes this week as a 100% increase.
+            # If there were no likes last week, treat any likes this week as a 100% increase
             weekly_growth = 100 if this_week_likes > 0 else 0
         else:
             weekly_growth = round(((this_week_likes - last_week_likes) / last_week_likes) * 100)
@@ -103,16 +102,14 @@ def get_event_like_insights(event_id):
 
     # ------------------------------
     # Insight 3: Peak Engagement
-    # Calculate which day had the highest number of likes.
     if total_likes > 0:
         daily_counts = {}
         for like in likes_list:
-            # Extract the date portion from the like's createdAt timestamp.
             like_date = like["createdAt"].date()
             daily_counts[like_date] = daily_counts.get(like_date, 0) + 1
 
         max_likes = max(daily_counts.values())
-        # In case of a tie, select the most recent day.
+        # In case of a tie, select the most recent day
         peak_days = [d for d, count in daily_counts.items() if count == max_likes]
         peak_day = max(peak_days)
         peak_engagement_days_ago = (now.date() - peak_day).days
@@ -126,7 +123,7 @@ def get_event_like_insights(event_id):
     all_events = list(db.events.find({}, {"likeCount": 1}))
     total_events = len(all_events)
     if total_events > 0:
-        # Use our computed total_likes for the current event.
+        # Use our computed total_likes for the current event
         def get_like_count(e):
             if e["_id"] == event["_id"]:
                 return total_likes
@@ -146,41 +143,31 @@ def get_event_like_insights(event_id):
         percentage_rank = 0
 
     # ------------------------------
-    # Group likes by day
+    # Group likes by day for dailyLikes
     daily_likes = {}
     for like in likes_list:
-        like_date = like["createdAt"].strftime("%Y-%m-%d")  # Convert to "YYYY-MM-DD"
-        daily_likes[like_date] = daily_likes.get(like_date, 0) + 1
+        like_date_str = like["createdAt"].strftime("%Y-%m-%d")  # e.g., "YYYY-MM-DD"
+        daily_likes[like_date_str] = daily_likes.get(like_date_str, 0) + 1
 
-    # Convert to sorted list
-    daily_likes_sorted = [{"date": date, "likes": count} for date, count in sorted(daily_likes.items())]
+    # Convert to a sorted list of dicts
+    daily_likes_sorted = [
+        {"date": date_str, "likes": count}
+        for date_str, count in sorted(daily_likes.items())
+    ]
 
     # ------------------------------
-    # Return all insights as numbers in a dictionary.
+    # Return all insights using the computed values
     return {
-        
-    "dailyLikes": [
-        {
-            "date": "2025-01-21",
-            "likes": 1
-        },
-        {
-            "date": "2025-01-24",
-            "likes": 50
-        },
-        {
-            "date": "2025-02-05",
-            "likes": 1
-        }
-    ],
-    "eventName": "era",
-    "lastLikeDaysAgo": 0,
-    "peakEngagementDaysAgo": 0,
-    "peakEngagementLikes": 1,
-    "percentageRank": 33,
-    "totalLikes": 3,
-    "weeklyGrowth": 0
+        "dailyLikes": daily_likes_sorted,
+        "eventName": event_name,
+        "lastLikeDaysAgo": last_like_days_ago,
+        "peakEngagementDaysAgo": peak_engagement_days_ago,
+        "peakEngagementLikes": peak_engagement_likes,
+        "percentageRank": percentage_rank,
+        "totalLikes": total_likes,
+        "weeklyGrowth": weekly_growth
     }
+
 
 @app.route("/event_click_insights/<event_id>", methods=["GET"])
 def get_event_clicks_insights(event_id):
