@@ -1,6 +1,7 @@
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 import config
+from datetime import datetime, timedelta
 
 # Connect to MongoDB
 mongodb_uri = config.MONGODB_URI
@@ -107,7 +108,41 @@ def update_popular_choice_badges():
 
     print("Popular Choice badge update completed.")
 
+def update_just_announced_badges():
+    """ Updates the 'just_announced' badge for events created in the last 3 days. """
+
+    # Define the time threshold (3 days ago)
+    three_days_ago = datetime.utcnow() - timedelta(days=3)
+
+    # Fetch all events
+    all_events = db.events.find({}, {"_id": 1, "createdAt": 1, "badges": 1})
+
+    for event in all_events:
+        event_id = event["_id"]
+        created_at = event.get("createdAt", None)
+        badges = event.get("badges", [])
+
+        if created_at and created_at >= three_days_ago:
+            # Add "just_announced" if not already present
+            if "just_announced" not in badges:
+                db.events.update_one(
+                    {"_id": event_id},
+                    {"$addToSet": {"badges": "just_announced"}}
+                )
+                print(f"Added 'just_announced' to Event {event_id}")
+        else:
+            # Remove "just_announced" if event is older than 3 days
+            if "just_announced" in badges:
+                db.events.update_one(
+                    {"_id": event_id},
+                    {"$pull": {"badges": "just_announced"}}
+                )
+                print(f"Removed 'just_announced' from Event {event_id}")
+
+    print("Just Announced badge update completed.")
+
 # Run the function
 if __name__ == "__main__":
     update_top_rated_badges()
     update_popular_choice_badges()
+    update_just_announced_badges()
