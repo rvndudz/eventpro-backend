@@ -141,8 +141,50 @@ def update_just_announced_badges():
 
     print("Just Announced badge update completed.")
 
-# Run the function
+def update_limited_seats_badges():
+    """ Updates the 'limited_seats' badge for events with 10% or fewer seats remaining. """
+
+    # Fetch all events with tickets data
+    all_events = db.events.find({}, {"_id": 1, "maximumTickets": 1, "ticketsSoldCount": 1, "badges": 1})
+
+    for event in all_events:
+        event_id = event["_id"]
+        max_tickets = event.get("maximumTickets", "0")
+        tickets_sold = event.get("ticketsSoldCount", "0")
+        badges = event.get("badges", [])
+
+        try:
+            max_tickets = int(max_tickets)
+            tickets_sold = int(tickets_sold)
+        except ValueError:
+            continue  # Skip if invalid ticket data
+
+        # Calculate remaining seat percentage
+        remaining_seats = max_tickets - tickets_sold
+        remaining_percentage = (remaining_seats / max_tickets) * 100 if max_tickets > 0 else 100
+
+        if remaining_percentage <= 10:
+            # Add "limited_seats" if not already present
+            if "limited_seats" not in badges:
+                db.events.update_one(
+                    {"_id": event_id},
+                    {"$addToSet": {"badges": "limited_seats"}}
+                )
+                print(f"Added 'limited_seats' to Event {event_id}")
+        else:
+            # Remove "limited_seats" if event has more than 10% seats remaining
+            if "limited_seats" in badges:
+                db.events.update_one(
+                    {"_id": event_id},
+                    {"$pull": {"badges": "limited_seats"}}
+                )
+                print(f"Removed 'limited_seats' from Event {event_id}")
+
+    print("Limited Seats badge update completed.")
+
+# Run the functions
 if __name__ == "__main__":
     update_top_rated_badges()
     update_popular_choice_badges()
     update_just_announced_badges()
+    update_limited_seats_badges()
