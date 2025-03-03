@@ -1,7 +1,8 @@
 from pymongo import MongoClient
 from bson.objectid import ObjectId
-import config
 from datetime import datetime, timedelta
+
+import config
 
 # Connect to MongoDB
 mongodb_uri = config.MONGODB_URI
@@ -182,9 +183,79 @@ def update_limited_seats_badges():
 
     print("Limited Seats badge update completed.")
 
+def update_fast_selling_badges():
+    """ Updates the 'fast_selling' badge for the top 10% of events with the highest sales percentage in the last 3 days. """
+
+    # Define the time range (last 3 days)
+    three_days_ago = datetime.utcnow() - timedelta(days=3)
+
+    # Get ticket sales from the last 3 days
+    recent_sales = db.orders.aggregate([
+        {"$match": {"createdAt": {"$gte": three_days_ago}}},
+        {"$group": {"_id": "$event", "tickets_sold": {"$sum": 1}}}
+    ])
+
+    # Convert to a list
+    recent_sales = list(recent_sales)
+    total_events = len(recent_sales)
+
+    if total_events == 0:
+        print("No recent ticket sales found.")
+        return
+
+    # Fetch event data (maximumTickets) for all recent sales
+    event_data = {}
+    for sale in recent_sales:
+        event = db.events.find_one({"_id": sale["_id"]}, {"maximumTickets": 1, "badges": 1})
+        if event:
+            try:
+                max_tickets = int(event.get("maximumTickets", "0"))
+                if max_tickets > 0:
+                    sales_percentage = (sale["tickets_sold"] / max_tickets) * 100
+                    event_data[sale["_id"]] = {
+                        "sales_percentage": sales_percentage,
+                        "badges": event.get("badges", [])
+                    }
+            except ValueError:
+                continue  # Skip invalid data
+
+    # Sort events by sales percentage (descending order)
+    sorted_events = sorted(event_data.items(), key=lambda x: x[1]["sales_percentage"], reverse=True)
+
+    # Get the top 10% of events
+    top_10_percent_count = max(1, total_events // 10)
+    top_events = sorted_events[:top_10_percent_count]
+
+    # Extract top event IDs
+    top_event_ids = {event[0] for event in top_events}
+
+    # Process all recent sales events to update their badges
+    for event_id, data in event_data.items():
+        badges = data["badges"]
+
+        if event_id in top_event_ids:
+            # Add "fast_selling" if not already present
+            if "fast_selling" not in badges:
+                db.events.update_one(
+                    {"_id": event_id},
+                    {"$addToSet": {"badges": "fast_selling"}}
+                )
+                print(f"Added 'fast_selling' to Event {event_id}")
+        else:
+            # Remove "fast_selling" if event is no longer in the top 10%
+            if "fast_selling" in badges:
+                db.events.update_one(
+                    {"_id": event_id},
+                    {"$pull": {"badges": "fast_selling"}}
+                )
+                print(f"Removed 'fast_selling' from Event {event_id}")
+
+    print("Fast Selling badge update completed.")
+
 # Run the functions
 if __name__ == "__main__":
     update_top_rated_badges()
     update_popular_choice_badges()
     update_just_announced_badges()
     update_limited_seats_badges()
+    update_fast_selling_badges()
