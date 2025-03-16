@@ -6,6 +6,8 @@ import json
 import config
 from datetime import datetime, timedelta
 
+from contentBasedRecSystem import get_recommended_event_ids
+
 app = Flask(__name__)
 
 # MongoDB Atlas connection string
@@ -278,6 +280,14 @@ def get_event_clicks_insights(event_id):
         "weeklyGrowth": weekly_growth
     })
 
+@app.route("/recommendations", methods=["GET"])
+def get_recommendations():
+    user_id = request.args.get("userId")
+    if not user_id:
+        return jsonify({"error": "Missing userId"}), 400
+
+    recommended_ids = get_recommended_event_ids(user_id, db, top_n=10)
+    return jsonify({"data": recommended_ids})
 
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
