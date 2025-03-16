@@ -26,8 +26,12 @@ from badge_functions import (
     update_fast_selling_badges,
 )
 
-# -----------------------------------------------------------------------------
-# 1. APScheduler Initialization in Session State
+# Import your recommendation function
+from contentBasedRecSystem import get_recommended_event_ids
+from bson.objectid import ObjectId
+
+# ----------------------------------------------------------------------------- 
+# 1. APScheduler Initialization in Session State 
 # -----------------------------------------------------------------------------
 if "scheduler" not in st.session_state:
     st.session_state.scheduler = BackgroundScheduler()
@@ -36,16 +40,16 @@ if "scheduler" not in st.session_state:
 if "jobs" not in st.session_state:
     st.session_state.jobs = {}
 
-# -----------------------------------------------------------------------------
-# 2. Define Badge Update Checkbox Keys and Their Defaults
+# ----------------------------------------------------------------------------- 
+# 2. Define Badge Update Checkbox Keys and Their Defaults 
 # -----------------------------------------------------------------------------
 checkbox_keys = ["top_rated", "popular_choice", "just_announced", "limited_seats", "fast_selling"]
 for key in checkbox_keys:
     if key not in st.session_state:
         st.session_state[key] = False
 
-# -----------------------------------------------------------------------------
-# 3. Functions for Badge Updates
+# ----------------------------------------------------------------------------- 
+# 3. Functions for Badge Updates 
 # -----------------------------------------------------------------------------
 def run_selected_badges(top_rated, popular_choice, just_announced, limited_seats, fast_selling):
     """Runs whichever badge-update functions correspond to the user’s selections."""
@@ -83,8 +87,8 @@ def clear_checkboxes():
     for key in checkbox_keys:
         st.session_state[key] = False
 
-# -----------------------------------------------------------------------------
-# 4. Scheduling Helpers
+# ----------------------------------------------------------------------------- 
+# 4. Scheduling Helpers 
 # -----------------------------------------------------------------------------
 interval_options = {
     "Every 5 minutes": 5,
@@ -130,10 +134,9 @@ def schedule_job(selected_interval):
     }
     st.success(f"Scheduled new job (ID: {job_id[:8]}) to run every {interval_minutes} minute(s).")
 
+# ----------------------------------------------------------------------------- 
+# 5. Sidebar for Switching Panels via Buttons 
 # -----------------------------------------------------------------------------
-# 5. Sidebar for Switching Panels via Buttons
-# -----------------------------------------------------------------------------
-# Initialize which panel is active (Badge Updates by default)
 if "selected_panel" not in st.session_state:
     st.session_state.selected_panel = "Badge Updates"
 
@@ -141,11 +144,24 @@ with st.sidebar:
     st.markdown("## Switch Panel")
     if st.button("Badge Updates"):
         st.session_state.selected_panel = "Badge Updates"
+    if st.button("Recommended Events"):
+        st.session_state.selected_panel = "Recommended Events"
     if st.button("Database Management"):
         st.session_state.selected_panel = "Database Management"
 
+# ----------------------------------------------------------------------------- 
+# 6. Helper: Fetch Events by IDs 
 # -----------------------------------------------------------------------------
-# 6. Main Panel Content Based on the Active Panel
+def get_events_by_ids(event_ids):
+    """
+    Given a list of event ID strings, fetch the corresponding event documents from the database.
+    """
+    valid_ids = [ObjectId(id_str) for id_str in event_ids if ObjectId.is_valid(id_str)]
+    events = list(db.events.find({"_id": {"$in": valid_ids}}))
+    return events
+
+# ----------------------------------------------------------------------------- 
+# 7. Main Panel Content Based on the Active Panel 
 # -----------------------------------------------------------------------------
 if st.session_state.selected_panel == "Badge Updates":
     # --------------------------
@@ -231,34 +247,55 @@ if st.session_state.selected_panel == "Badge Updates":
                         st.error(f"Error cancelling job: {e}")
                     del st.session_state.jobs[job_id]
                     st.warning(f"Cancelled job: {display_id}")
-                    # st.experimental_rerun() if your Streamlit version supports it.
 
     st.write("---")
     st.info("Scheduled jobs run in the background as long as this app is active.")
 
+elif st.session_state.selected_panel == "Recommended Events":
+    # --------------------------
+    # RECOMMENDED EVENTS PANEL
+    # --------------------------
+    st.title("Recommended Events")
+    st.markdown("### View Recommended Event Cards")
+    
+    # For testing, allow manual input of a User ID
+    test_user_id = st.text_input("Enter User ID for Recommendations", value="67d6addee62e8f20f5a9cbae")
+    
+    if st.button("Get Recommended Events"):
+        recommended_ids = get_recommended_event_ids(test_user_id, db)
+        st.write("Recommended Event IDs:", recommended_ids)
+        
+        events = get_events_by_ids(recommended_ids)
+        if events:
+            for event in events:
+                st.subheader(event.get("title", "Untitled Event"))
+                st.write(event.get("description", "No description available."))
+                image_url = event.get("imageUrl", "")
+                if image_url:
+                    st.image(image_url, use_column_width=True)
+                st.write("---")
+        else:
+            st.warning("No recommended events found.")
+
 else:
-   # --------------------------
-# DATABASE MANAGEMENT PANEL
-# --------------------------
+    # --------------------------
+    # DATABASE MANAGEMENT PANEL
+    # --------------------------
     st.title("Database Management")
     st.markdown("Select collections to clear all documents from. **Warning**: This is irreversible!")
 
     # List your collections here
     collections = ["categories", "clicks", "events", "likes", "orders", "users"]
 
-    # Maintain checkbox states for each collection in session_state
     if "collections_to_clear" not in st.session_state:
         st.session_state.collections_to_clear = {c: False for c in collections}
 
-    # Also keep track of whether we're in the "confirmation pending" step
     if "confirmation_pending" not in st.session_state:
         st.session_state.confirmation_pending = False
 
-    # Which collections did the user select to delete (stored when they first click Clear)?
     if "selected_collections_for_deletion" not in st.session_state:
         st.session_state.selected_collections_for_deletion = []
 
-    # Render a checkbox for each collection
     for c in collections:
         st.session_state.collections_to_clear[c] = st.checkbox(
             c,
@@ -266,37 +303,31 @@ else:
             key=f"clear_{c}"
         )
 
-    # First button click: gather selections, move to confirmation step
     if st.button("Clear Selected"):
         selected = [c for c, val in st.session_state.collections_to_clear.items() if val]
         if not selected:
             st.warning("No collections selected.")
         else:
-            # Store selected collections and prompt for confirmation
             st.session_state.selected_collections_for_deletion = selected
             st.session_state.confirmation_pending = True
 
-    # If user clicked "Clear Selected" and actually chose some collections,
-    # ask for confirmation before deleting them.
     if st.session_state.confirmation_pending:
         st.error("You are about to clear the following collections. This action is irreversible!")
         st.write(st.session_state.selected_collections_for_deletion)
 
         col_confirm, col_cancel = st.columns(2)
-
         with col_confirm:
             if st.button("Yes, I'm sure"):
-                # Perform the deletion
                 for c in st.session_state.selected_collections_for_deletion:
                     db[c].delete_many({})
                     st.warning(f"Cleared all documents from `{c}` collection.")
-
-                # Reset the confirmation flags
                 st.session_state.confirmation_pending = False
                 st.session_state.selected_collections_for_deletion = []
-
         with col_cancel:
             if st.button("Cancel"):
                 st.session_state.confirmation_pending = False
                 st.session_state.selected_collections_for_deletion = []
                 st.info("Deletion cancelled.")
+
+    st.write("---")
+    st.markdown("## Database Management")
