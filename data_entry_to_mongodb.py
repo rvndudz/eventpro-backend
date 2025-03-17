@@ -31,6 +31,7 @@ organizer_id = ObjectId("6776985e1324874860b8ca8d")
 # 3. Load the Cleaned Data
 # Replace 'final_eventbrite_data.xlsx' with your actual file name or CSV.
 df = pd.read_excel('eventbrite_data_final_updated.xlsx')
+df = df.sample(n=100, random_state=42)
 
 
 # In[ ]:
@@ -75,6 +76,7 @@ for idx, row in df.iterrows():
     
     # --- D) Category lookup
     cat_name = str(row['category']).strip().lower()
+    cat_name = cat_name.replace('-', ' ')
     category_id = category_map.get(cat_name)
     if not category_id:
         # If there's no matching category, skip or choose a default
