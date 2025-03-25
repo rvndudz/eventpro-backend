@@ -253,7 +253,7 @@ def get_event_clicks_insights(event_id):
                 break
         if rank is None:
             rank = total_events
-        percentage_rank = max(1, round((rank / total_events) * 100))
+        percentage_rank = round((rank / total_events) * 100)
     else:
         percentage_rank = 0
 
