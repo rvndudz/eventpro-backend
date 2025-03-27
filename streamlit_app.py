@@ -12,6 +12,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
 import config
 
+from streamlit_rec import main as recommended_events_main
+
+from email_recommendation import main as email_recommendation_main
+
 # Connect to MongoDB
 mongodb_uri = config.MONGODB_URI
 client = MongoClient(mongodb_uri)
@@ -148,6 +152,9 @@ with st.sidebar:
         st.session_state.selected_panel = "Recommended Events"
     if st.button("Database Management"):
         st.session_state.selected_panel = "Database Management"
+    if st.button("Send Email Recommendations"):
+        st.session_state.selected_panel = "Send Email Recommendations"
+
 
 # ----------------------------------------------------------------------------- 
 # 6. Helper: Fetch Events by IDs 
@@ -252,30 +259,11 @@ if st.session_state.selected_panel == "Badge Updates":
     st.info("Scheduled jobs run in the background as long as this app is active.")
 
 elif st.session_state.selected_panel == "Recommended Events":
-    # --------------------------
-    # RECOMMENDED EVENTS PANEL
-    # --------------------------
-    st.title("Recommended Events")
-    st.markdown("### View Recommended Event Cards")
-    
-    # For testing, allow manual input of a User ID
-    test_user_id = st.text_input("Enter User ID for Recommendations", value="67d6addee62e8f20f5a9cbae")
-    
-    if st.button("Get Recommended Events"):
-        recommended_ids = get_recommended_event_ids(test_user_id, db)
-        st.write("Recommended Event IDs:", recommended_ids)
-        
-        events = get_events_by_ids(recommended_ids)
-        if events:
-            for event in events:
-                st.subheader(event.get("title", "Untitled Event"))
-                st.write(event.get("description", "No description available."))
-                image_url = event.get("imageUrl", "")
-                if image_url:
-                    st.image(image_url, use_column_width=True)
-                st.write("---")
-        else:
-            st.warning("No recommended events found.")
+    # Use the main function from streamlit_rec.py
+    recommended_events_main()
+
+elif st.session_state.selected_panel == "Send Email Recommendations":
+    email_recommendation_main()
 
 else:
     # --------------------------
