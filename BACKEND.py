@@ -82,25 +82,24 @@ def get_event_like_insights(event_id):
 
     # ------------------------------
     # Insight 2: Weekly Growth in Likes
-    event_created = event.get("createdAt")
-    if event_created and (now - event_created).days >= 14:
-        this_week_start = now - timedelta(days=7)
-        last_week_start = now - timedelta(days=14)
-        this_week_likes = db.likes.count_documents({
-            "event": ObjectId(event_id),
-            "createdAt": {"$gte": this_week_start}
-        })
-        last_week_likes = db.likes.count_documents({
-            "event": ObjectId(event_id),
-            "createdAt": {"$gte": last_week_start, "$lt": this_week_start}
-        })
-        if last_week_likes == 0:
-            # If there were no likes last week, treat any likes this week as a 100% increase
-            weekly_growth = 100 if this_week_likes > 0 else 0
-        else:
-            weekly_growth = round(((this_week_likes - last_week_likes) / last_week_likes) * 100)
+
+    this_week_start = now - timedelta(days=7)
+    last_week_start = now - timedelta(days=14)
+    this_week_likes = db.likes.count_documents({
+        "event": ObjectId(event_id),
+        "createdAt": {"$gte": this_week_start}
+    })
+
+    last_week_likes = db.likes.count_documents({
+        "event": ObjectId(event_id),
+        "createdAt": {"$gte": last_week_start, "$lt": this_week_start}
+    })
+
+    if last_week_likes == 0:
+        weekly_growth = 100 if this_week_likes > 0 else 0
     else:
-        weekly_growth = 0
+        weekly_growth = round(((this_week_likes - last_week_likes) / last_week_likes) * 100)
+
 
     # ------------------------------
     # Insight 3: Peak Engagement
@@ -198,24 +197,24 @@ def get_event_clicks_insights(event_id):
 
     # ------------------------------
     # Insight 2: Weekly Growth in Clicks
-    event_created = event.get("createdAt")
-    if event_created and (now - event_created).days >= 14:
-        this_week_start = now - timedelta(days=7)
-        last_week_start = now - timedelta(days=14)
-        this_week_clicks = db.clicks.count_documents({
-            "event": ObjectId(event_id),
-            "createdAt": {"$gte": this_week_start}
-        })
-        last_week_clicks = db.clicks.count_documents({
-            "event": ObjectId(event_id),
-            "createdAt": {"$gte": last_week_start, "$lt": this_week_start}
-        })
-        if last_week_clicks == 0:
-            weekly_growth = 100 if this_week_clicks > 0 else 0
-        else:
-            weekly_growth = round(((this_week_clicks - last_week_clicks) / last_week_clicks) * 100)
+
+    this_week_start = now - timedelta(days=7)
+    last_week_start = now - timedelta(days=14)
+    this_week_clicks = db.clicks.count_documents({
+        "event": ObjectId(event_id),
+        "createdAt": {"$gte": this_week_start}
+    })
+    last_week_clicks = db.clicks.count_documents({
+        "event": ObjectId(event_id),
+        "createdAt": {"$gte": last_week_start, "$lt": this_week_start}
+    })
+    print("Last Week Clicks:", last_week_clicks)
+    print("This Week Clicks:", this_week_clicks)
+
+    if last_week_clicks == 0:
+        weekly_growth = 100 if this_week_clicks > 0 else 0
     else:
-        weekly_growth = 0
+        weekly_growth = round(((this_week_clicks - last_week_clicks) / last_week_clicks) * 100)
 
     # ------------------------------
     # Insight 3: Peak Engagement for Clicks
