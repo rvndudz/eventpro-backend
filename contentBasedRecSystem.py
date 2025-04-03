@@ -41,7 +41,11 @@ def get_recommended_event_ids(user_id, db, top_n=10):
     user_obj_id = ObjectId(user_id)
     
     # Dynamic weights based on user interaction frequency
-    weights = {'orders': 0.7, 'likes': 0.3}
+    
+    
+    weights = {'orders': 0.7, 
+               'likes': 0.2, 
+               'clicks': 0.1}
     
     # Collect user interactions
     event_weights = {}
@@ -54,6 +58,10 @@ def get_recommended_event_ids(user_id, db, top_n=10):
     # Process likes
     for doc in db.likes.find({"liker": user_obj_id}, {"event": 1}):
         event_weights[doc["event"]] = event_weights.get(doc["event"], 0) + weights['likes']
+
+    # Process clicks
+    for doc in db.clicks.find({"clicker": user_obj_id}, {"event": 1}):
+        event_weights[doc["event"]] = event_weights.get(doc["event"], 0) + weights['clicks']
 
     if not event_weights:
         return []
