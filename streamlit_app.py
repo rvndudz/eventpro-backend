@@ -16,6 +16,11 @@ from streamlit_rec import main as recommended_events_main
 
 from email_recommendation import main as email_recommendation_main
 
+from delete_outdated_events import main as delete_outdated_events_main, delete_outdated_events
+
+from add_dummy_interactions import main as add_dummy_interactions_main
+
+
 # Connect to MongoDB
 mongodb_uri = config.MONGODB_URI
 client = MongoClient(mongodb_uri)
@@ -145,7 +150,7 @@ if "selected_panel" not in st.session_state:
     st.session_state.selected_panel = "Badge Updates"
 
 with st.sidebar:
-    st.markdown("## Switch Panel")
+    st.markdown("## Admin Panel")
     if st.button("Badge Updates"):
         st.session_state.selected_panel = "Badge Updates"
     if st.button("Recommended Events"):
@@ -154,6 +159,12 @@ with st.sidebar:
         st.session_state.selected_panel = "Database Management"
     if st.button("Send Email Recommendations"):
         st.session_state.selected_panel = "Send Email Recommendations"
+    if st.button("Delete Outdated Events"):
+        st.session_state.selected_panel = "Delete Outdated Events"
+    if st.button("Upload Events From Excel"):
+        st.session_state.selected_panel = "Upload Events From Excel"
+    if st.button("Add Dummy Event Data"):
+        st.session_state.selected_panel = "Add Dummy Event Data"
 
 
 # ----------------------------------------------------------------------------- 
@@ -265,6 +276,58 @@ elif st.session_state.selected_panel == "Recommended Events":
 elif st.session_state.selected_panel == "Send Email Recommendations":
     email_recommendation_main()
 
+elif st.session_state.selected_panel == "Delete Outdated Events":
+    delete_outdated_events_main()
+
+    st.write("---")
+    st.markdown("### Schedule Automatic Deletion")
+
+    delete_options = {
+        "Every day": 1440,
+        "Every 3 days": 4320,
+        "Every week": 10080,
+    }
+
+    if "selected_delete_interval" not in st.session_state:
+        st.session_state.selected_delete_interval = "Every day"
+
+    selected_interval = st.selectbox(
+        "Choose how often to delete outdated events:",
+        list(delete_options.keys()),
+        key="selected_delete_interval"
+    )
+
+    if st.button("Schedule Deletion Job"):
+        interval_minutes = delete_options[selected_interval]
+        job_id = str(uuid.uuid4())
+
+        def job_func():
+            try:
+                delete_outdated_events()
+            except Exception as e:
+                print(f"[Scheduler] Deletion error: {e}")
+
+        st.session_state.scheduler.add_job(
+            func=job_func,
+            trigger='interval',
+            minutes=interval_minutes,
+            id=job_id,
+        )
+
+        st.session_state.jobs[job_id] = {
+            "interval": selected_interval,
+            "type": "Delete Outdated Events",
+            "created_at": datetime.utcnow().isoformat(),
+        }
+
+        st.success(f"Scheduled deletion every {selected_interval.lower()}.")
+
+elif st.session_state.selected_panel == "Upload Events From Excel":
+    from streamlit_event_uploader import *  # This runs the uploader app
+
+elif st.session_state.selected_panel == "Add Dummy Event Data":
+    add_dummy_interactions_main()
+
 else:
     # --------------------------
     # DATABASE MANAGEMENT PANEL
@@ -273,7 +336,7 @@ else:
     st.markdown("Select collections to clear all documents from. **Warning**: This is irreversible!")
 
     # List your collections here
-    collections = ["categories", "clicks", "events", "likes", "orders", "users"]
+    collections = ["categories", "events", "users", "clicks", "likes", "orders"]
 
     if "collections_to_clear" not in st.session_state:
         st.session_state.collections_to_clear = {c: False for c in collections}
@@ -318,4 +381,3 @@ else:
                 st.info("Deletion cancelled.")
 
     st.write("---")
-    st.markdown("## Database Management")
